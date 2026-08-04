@@ -1,0 +1,1 @@
+College Football 2025 Team Stats API
