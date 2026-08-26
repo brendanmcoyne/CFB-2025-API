@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from offensive_stats import offensive_stats
 from defensive_stats import defensive_stats
@@ -11,7 +12,18 @@ from teams import teams
 app = FastAPI(
     title="College Football Stats 2025 API",
     description="Team and season statistics for college football.",
-    version="1.0.0",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 for team in teams.values():
@@ -31,7 +43,7 @@ for team in teams.values():
 def home():
     return {
         "message": "College Football Statistics API is running",
-        "documentation": "/docs",
+        "documentation": "/docs"
     }
 
 
@@ -59,7 +71,7 @@ def get_team(team_id: int):
     team = teams.get(team_id)
 
     if team is None:
-        raise HTTPException(status_code=404,detail="Team not found")
+        raise HTTPException(status_code=404, detail="Team not found")
 
     return team
 
@@ -72,17 +84,17 @@ def get_conference_teams(conference: str):
     ]
 
     if not results:
-        raise HTTPException(status_code=404,detail="No teams found for that conference")
+        raise HTTPException(status_code=404, detail="No teams found for that conference")
 
     return results
 
 
 @app.get("/rankings/{stat_name}", response_model=List[Team])
-def rank_teams(stat_name: str,descending: bool = True,):
+def rank_teams(stat_name: str,descending: bool = True):
     valid_stats = TeamStats.model_fields.keys()
 
     if stat_name not in valid_stats:
-        raise HTTPException(status_code=400,detail={"message": "Invalid statistic","valid_statistics": list(valid_stats)})
+        raise HTTPException(status_code=400, detail={"message": "Invalid statistic","valid_statistics": list(valid_stats)})
 
     ranked_teams = [
         team
@@ -93,7 +105,7 @@ def rank_teams(stat_name: str,descending: bool = True,):
     return sorted(
         ranked_teams,
         key=lambda team: getattr(team.stats, stat_name),
-        reverse=descending,
+        reverse=descending
     )
 
 

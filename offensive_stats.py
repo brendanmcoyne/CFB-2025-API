@@ -10,7 +10,6 @@ offensive_stats = {
         "total_yards": 5960,
         "total_yards_per_game": 458.5,
         "turnovers": 16,
-        
     },
     "Oregon": {
         "games_played": 15,
