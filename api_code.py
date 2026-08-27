@@ -8,6 +8,7 @@ from defensive_stats import defensive_stats
 from special_teams_stats import special_teams_stats
 from models import Team, TeamStats
 from teams import teams
+from scoring import scoring
 
 app = FastAPI(
     title="College Football Stats 2025 API",
@@ -30,12 +31,14 @@ for team in teams.values():
     offense = offensive_stats.get(team.name, {})
     defense = defensive_stats.get(team.name, {})
     special = special_teams_stats.get(team.name, {})
+    score = scoring.get(team.name, {})
 
     team.stats = team.stats.model_copy(
         update={
             **offense,
             **defense,
             **special,
+            **score,
         }
     )
     

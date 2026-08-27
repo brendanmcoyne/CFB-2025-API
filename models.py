@@ -40,6 +40,11 @@ class TeamStats(BaseModel):
     extra_points_made: Optional[int] = None
     extra_point_percentage: Optional[float] = None
 
+    rushing_touchdowns: Optional[int] = None
+    passing_touchdowns: Optional[int] = None
+    defensive_touchdowns: Optional[int] = None
+    special_teams_touchdowns: Optional[int] = None
+
 class Team(BaseModel):
     id: int
     name: str
