@@ -262,8 +262,7 @@ async def get_espn_scoring_plays(event_id: str):
             response.raise_for_status()
             data = response.json()
     except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(
-            status_code=502,
+        raise HTTPException( status_code=502,
             detail=f"Could not fetch ESPN game: {error}",
         ) from error
 
@@ -365,7 +364,6 @@ def player_stat(player_box: dict, category_name: str, *possible_keys: str):
 
 
 def team_stat(team_box: dict, *possible_names: str):
-    """Read a statistic from ESPN's team box score."""
     for stat in team_box.get("statistics", []):
         if stat.get("name") not in possible_names:
             continue
@@ -379,7 +377,6 @@ def team_stat(team_box: dict, *possible_names: str):
 
 
 def made_attempted(player_box: dict, category_name: str, *possible_keys: str):
-    """Parse ESPN kicking totals such as '2/3'."""
     category = next(
         (
             item
@@ -404,10 +401,7 @@ def made_attempted(player_box: dict, category_name: str, *possible_keys: str):
         if index >= len(totals):
             continue
 
-        match = re.fullmatch(
-            r"\s*(\d+)\s*/\s*(\d+)\s*",
-            str(totals[index]),
-        )
+        match = re.fullmatch( r"\s*(\d+)\s*/\s*(\d+)\s*", str(totals[index]))
 
         if match:
             return int(match.group(1)), int(match.group(2))
@@ -461,10 +455,7 @@ def classify_lost_fumbles(data: dict):
 
     return counts, unclassified
 
-@app.get(
-    "/espn/fantasy-game/{event_id}",
-    response_model=List[FantasyGameStats],
-)
+@app.get( "/espn/fantasy-game/{event_id}", response_model=List[FantasyGameStats] )
 async def get_espn_fantasy_game(event_id: str):
     url = (
         "https://site.api.espn.com/apis/site/v2/"
@@ -473,10 +464,7 @@ async def get_espn_fantasy_game(event_id: str):
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(
-                url,
-                params={"event": event_id},
-            )
+            response = await client.get( url, params={"event": event_id} )
             response.raise_for_status()
             data = response.json()
     except (httpx.HTTPError, ValueError) as error:
@@ -513,15 +501,8 @@ async def get_espn_fantasy_game(event_id: str):
         for entry in player_boxes
     }
 
-    if (
-        len(competitors_by_id) != 2
-        or len(team_boxes_by_id) != 2
-        or len(player_boxes_by_id) != 2
-    ):
-        raise HTTPException(
-            status_code=502,
-            detail="ESPN did not return a complete two-team box score.",
-        )
+    if ( len(competitors_by_id) != 2 or len(team_boxes_by_id) != 2  or len(player_boxes_by_id) != 2 ):
+        raise HTTPException( status_code=502, detail="ESPN did not return a complete two-team box score." )
 
     results = []
 
@@ -534,15 +515,8 @@ async def get_espn_fantasy_game(event_id: str):
             if other_id != team_id
         )
 
-        if (
-            team_id not in competitors_by_id
-            or opponent_id not in competitors_by_id
-            or team_id not in player_boxes_by_id
-        ):
-            raise HTTPException(
-                status_code=502,
-                detail="Could not match ESPN team IDs.",
-            )
+        if ( team_id not in competitors_by_id or opponent_id not in competitors_by_id or team_id not in player_boxes_by_id ):
+            raise HTTPException( status_code=502, detail="Could not match ESPN team IDs." )
 
         player_box = player_boxes_by_id[team_id]
         opponent_box = team_boxes_by_id[opponent_id]
@@ -557,41 +531,21 @@ async def get_espn_fantasy_game(event_id: str):
             receiving_fumbles_lost = 0
 
         elif team_fumbles_lost is not None:
-            counts = fumble_counts.get(
-                team_id,
-                {"rushing": 0, "receiving": 0},
-            )
+            counts = fumble_counts.get( team_id, {"rushing": 0, "receiving": 0} )
 
             classified_total = counts["rushing"] + counts["receiving"]
 
-            if (
-                team_id not in unclassified_fumble_teams
-                and classified_total == team_fumbles_lost
-            ):
+            if ( team_id not in unclassified_fumble_teams and classified_total == team_fumbles_lost ):
                 
                 rushing_fumbles_lost = counts["rushing"]
                 receiving_fumbles_lost = counts["receiving"]
 
-        passing_yards = as_int(
-            player_stat(player_box, "passing", "passingYards")
-        )
-        passing_tds = as_int(
-            player_stat(player_box, "passing", "passingTouchdowns")
-        )
+        passing_yards = as_int( player_stat(player_box, "passing", "passingYards"))
+        passing_tds = as_int( player_stat(player_box, "passing", "passingTouchdowns") )
 
-        fg_made, fg_attempted = made_attempted(
-            player_box,
-            "kicking",
-            "fieldGoalsMade/fieldGoalAttempts",
-            "fieldGoalsMade/fieldGoalsAttempted",
-        )
+        fg_made, fg_attempted = made_attempted( player_box, "kicking", "fieldGoalsMade/fieldGoalAttempts", "fieldGoalsMade/fieldGoalsAttempted" )
 
-        xp_made, xp_attempted = made_attempted(
-            player_box,
-            "kicking",
-            "extraPointsMade/extraPointAttempts",
-            "extraPointsMade/extraPointsAttempted",
-        )
+        xp_made, xp_attempted = made_attempted( player_box, "kicking", "extraPointsMade/extraPointAttempts", "extraPointsMade/extraPointsAttempted" )
 
         fg_distances = []
 
@@ -602,16 +556,11 @@ async def get_espn_fantasy_game(event_id: str):
             if play.get("type", {}).get("text") != "Field Goal Good":
                 continue
 
-            match = re.search(
-                r"(\d+)\s+Yd\s+Field\s+Goal",
-                play.get("text", ""),
-                flags=re.IGNORECASE,
-            )
+            match = re.search( r"(\d+)\s+Yd\s+Field\s+Goal", play.get("text", ""), flags=re.IGNORECASE )
 
             if match:
                 fg_distances.append(int(match.group(1)))
 
-        # Only trust the distances if we found one for every made FG.
         verified_fg_distances = (
             fg_distances
             if fg_made is not None and len(fg_distances) == fg_made
@@ -643,8 +592,7 @@ async def get_espn_fantasy_game(event_id: str):
                 receiving_fumbles_lost=receiving_fumbles_lost,
 
                 # DEFENSE
-                points_allowed=(
-                    int(opponent_score)
+                points_allowed=(int(opponent_score)
                     if opponent_score is not None
                     else None
                 ),
@@ -667,46 +615,3 @@ async def get_espn_fantasy_game(event_id: str):
         )
 
     return results
-
-@app.get("/espn/inspect-fumbles/{event_id}")
-async def inspect_espn_fumbles(event_id: str):
-    url = (
-        "https://site.api.espn.com/apis/site/v2/"
-        "sports/football/college-football/summary"
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(url, params={"event": event_id})
-            response.raise_for_status()
-            data = response.json()
-    except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not fetch ESPN game: {error}",
-        ) from error
-
-    return {
-        "teams": [
-            {
-                "team": entry.get("team", {}).get("displayName"),
-                "fumble_stats": [
-                    stat
-                    for stat in entry.get("statistics", [])
-                    if "fumbl" in str(stat).lower()
-                ],
-            }
-            for entry in data.get("boxscore", {}).get("teams", [])
-        ],
-        "players": [
-            {
-                "team": entry.get("team", {}).get("displayName"),
-                "fumble_categories": [
-                    category
-                    for category in entry.get("statistics", [])
-                    if "fumbl" in str(category).lower()
-                ],
-            }
-            for entry in data.get("boxscore", {}).get("players", [])
-        ],
-    }
