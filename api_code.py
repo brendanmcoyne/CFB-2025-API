@@ -615,3 +615,65 @@ async def get_espn_fantasy_game(event_id: str):
         )
 
     return results
+
+@app.get("/espn/team-schedule/{espn_team_id}")
+async def get_espn_team_schedule(
+    espn_team_id: str,
+    season: int = 2026,
+):
+    url = (
+        "https://site.api.espn.com/apis/site/v2/"
+        f"sports/football/college-football/teams/{espn_team_id}/schedule"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                url,
+                params={
+                    "season": season,
+                },
+            )
+
+            response.raise_for_status()
+            data = response.json()
+
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not fetch ESPN team schedule: {error}",
+        ) from error
+
+    games = []
+
+    for event in data.get("events", []):
+        competition = (event.get("competitions") or [{}])[0]
+        competitors = competition.get("competitors", [])
+
+        teams = []
+
+        for entry in competitors:
+            teams.append({
+                "espn_team_id": entry.get("team", {}).get("id"),
+                "name": entry.get("team", {}).get("displayName"),
+                "home_away": entry.get("homeAway"),
+                "score": entry.get("score", {}).get("value")
+                    if isinstance(entry.get("score"), dict)
+                    else entry.get("score"),
+                "winner": entry.get("winner"),
+            })
+
+        games.append({
+            "event_id": event.get("id"),
+            "name": event.get("name"),
+            "start_time": event.get("date"),
+            "status": event.get("status", {}).get("type", {}).get("name"),
+            "week": event.get("week", {}).get("number"),
+            "teams": teams,
+        })
+
+    return {
+        "espn_team_id": espn_team_id,
+        "season": season,
+        "games": games,
+    }
