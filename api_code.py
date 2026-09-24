@@ -616,11 +616,60 @@ async def get_espn_fantasy_game(event_id: str):
 
     return results
 
+@app.get("/espn/team-id")
+async def get_espn_team_id(team_name: str):
+    url = (
+        "https://site.api.espn.com/apis/site/v2/"
+        "sports/football/college-football/teams"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                url,
+                params={"limit": 500},
+            )
+
+            response.raise_for_status()
+            data = response.json()
+
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not fetch ESPN teams: {error}",
+        ) from error
+
+    target = team_name.lower().strip()
+
+    for sport in data.get("sports", []):
+        for league in sport.get("leagues", []):
+            for entry in league.get("teams", []):
+                team = entry.get("team", {})
+
+                names = [
+                    team.get("displayName"),
+                    team.get("shortDisplayName"),
+                    team.get("location"),
+                    team.get("name"),
+                    team.get("abbreviation"),
+                ]
+
+                if any(
+                    name and name.lower().strip() == target
+                    for name in names
+                ):
+                    return {
+                        "espn_team_id": team.get("id"),
+                        "name": team.get("displayName"),
+                    }
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Could not find ESPN team '{team_name}'.",
+    )
+
 @app.get("/espn/team-schedule/{espn_team_id}")
-async def get_espn_team_schedule(
-    espn_team_id: str,
-    season: int = 2026,
-):
+async def get_espn_team_schedule(espn_team_id: str, season: int = 2026):
     url = (
         "https://site.api.espn.com/apis/site/v2/"
         f"sports/football/college-football/teams/{espn_team_id}/schedule"
@@ -639,10 +688,7 @@ async def get_espn_team_schedule(
             data = response.json()
 
     except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not fetch ESPN team schedule: {error}",
-        ) from error
+        raise HTTPException(status_code=502, detail=f"Could not fetch ESPN team schedule: {error}") from error
 
     games = []
 
