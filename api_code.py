@@ -449,8 +449,8 @@ async def get_espn_fantasy_game(event_id: str):
             if play_type in {
                 "Interception Return Touchdown",
                 "Fumble Return Touchdown",
+                "Fumble Recovery (Opponent)",
             }:
-
                 defensive_touchdowns += 1
 
         safeties = 0
@@ -498,6 +498,16 @@ async def get_espn_fantasy_game(event_id: str):
                     ):
                         blocked_kicks += 1
                         break
+
+        for play in data.get("scoringPlays", []):
+            if str(play.get("team", {}).get("id")) != team_id:
+                continue
+
+            if play.get("type", {}).get("text") in {
+                "Blocked Field Goal Touchdown",
+                "Blocked Punt Touchdown",
+            }:
+                blocked_kicks += 1
 
         results.append(
             FantasyGameStats(
