@@ -579,7 +579,23 @@ async def get_espn_team_id(team_name: str):
             detail=f"Could not fetch ESPN teams: {error}",
         ) from error
 
+    team_id_overrides = {
+        "smu": "2567",
+        "texas tech": "2641",
+        "purdue": "2509",
+        "tcu": "2628",
+        "mississippi": "145",
+        "tennessee": "2633",
+        "south carolina": "2579",
+    }
+
     target = team_name.lower().strip()
+
+    if target in team_id_overrides:
+        return {
+            "espn_team_id": team_id_overrides[target],
+            "team_name": team_name,
+        }
 
     for sport in data.get("sports", []):
         for league in sport.get("leagues", []):
@@ -662,4 +678,45 @@ async def get_espn_team_schedule(espn_team_id: str, season: int = 2026):
         "espn_team_id": espn_team_id,
         "season": season,
         "games": games,
+    }
+
+@app.get("/espn/debug-teams")
+async def debug_espn_teams():
+    url = (
+        "https://site.api.espn.com/apis/site/v2/"
+        "sports/football/college-football/teams"
+    )
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            url,
+            params={
+                "groups": 80,
+                "limit": 500,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    results = []
+
+    for sport in data.get("sports", []):
+        for league in sport.get("leagues", []):
+            for entry in league.get("teams", []):
+                team = entry.get("team", {})
+
+                name = team.get("displayName", "")
+
+                if ( "SMU" in name.upper() or "TEXAS TECH" in name.upper()):
+                    results.append({
+                        "id": team.get("id"),
+                        "displayName": team.get("displayName"),
+                        "shortDisplayName": team.get("shortDisplayName"),
+                        "location": team.get("location"),
+                        "name": team.get("name"),
+                        "abbreviation": team.get("abbreviation"),
+                    })
+
+    return {
+        "matches": results
     }
