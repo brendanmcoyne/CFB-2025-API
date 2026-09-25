@@ -116,139 +116,6 @@ def rank_teams(stat_name: str,descending: bool = True):
         reverse=descending
     )
 
-
-@app.post("/teams", response_model=Team, status_code=201)
-def create_team(team: Team):
-    if team.id in teams:
-        raise HTTPException(status_code=409,detail="A team with that ID already exists")
-
-    for existing_team in teams.values():
-        if existing_team.name.lower() == team.name.lower():
-            raise HTTPException(status_code=409,detail="A team with that name already exists")
-
-    teams[team.id] = team
-    return team
-
-
-@app.put("/teams/{team_id}", response_model=Team)
-def update_team(team_id: int, updated_team: Team):
-    if team_id not in teams:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    if updated_team.id != team_id:
-        raise HTTPException(status_code=400,detail="The team ID in the URL must match the request body")
-
-    teams[team_id] = updated_team
-    return updated_team
-
-
-@app.delete("/teams/{team_id}")
-def delete_team(team_id: int):
-    team = teams.pop(team_id, None)
-
-    if team is None:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    return {
-        "message": "Team deleted",
-        "team": team,
-    }
-
-@app.get("/espn/test/{event_id}")
-async def test_espn_game(event_id: str):
-    url = (
-        "https://site.api.espn.com/apis/site/v2/"
-        "sports/football/college-football/summary"
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(
-                url,
-                params={"event": event_id},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-    except httpx.HTTPError as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not fetch ESPN game: {error}",
-        ) from error
-
-    return {
-        "header": data.get("header"),
-        "boxscore": data.get("boxscore"),
-        "plays": data.get("plays"),
-        "scoringPlays": data.get("scoringPlays"),
-    }
-
-@app.get("/espn/plays/{event_id}")
-async def test_espn_plays(event_id: str):
-    url = (
-        "https://site.api.espn.com/apis/site/v2/"
-        "sports/football/college-football/playbyplay"
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(
-                url,
-                params={"event": event_id},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-    except httpx.HTTPError as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not fetch ESPN play-by-play: {error}",
-        ) from error
-
-    return {
-        "event_id": event_id,
-        "data": data,
-    }
-
-@app.get("/espn/inspect/{event_id}")
-async def inspect_espn_game(event_id: str):
-    url = (
-        "https://site.api.espn.com/apis/site/v2/"
-        "sports/football/college-football/summary"
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(url, params={"event": event_id})
-            response.raise_for_status()
-            data = response.json()
-    except (httpx.HTTPError, ValueError) as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not inspect ESPN game: {error}",
-        ) from error
-
-    plays = data.get("plays")
-    scoring_plays = data.get("scoringPlays")
-
-    return {
-        "event_id": event_id,
-        "top_level_keys": list(data.keys()),
-        "plays_type": type(plays).__name__,
-        "plays_count": len(plays) if isinstance(plays, list) else None,
-        "scoring_plays_count": (
-            len(scoring_plays)
-            if isinstance(scoring_plays, list)
-            else None
-        ),
-        "sample_play": plays[0] if isinstance(plays, list) and plays else None,
-        "sample_scoring_play": (
-            scoring_plays[0]
-            if isinstance(scoring_plays, list) and scoring_plays
-            else None
-        ),
-    }
-
 @app.get("/espn/scoring-plays/{event_id}")
 async def get_espn_scoring_plays(event_id: str):
     url = (
@@ -523,6 +390,8 @@ async def get_espn_fantasy_game(event_id: str):
         opponent_player_box = player_boxes_by_id[opponent_id]
 
         team_fumbles_lost = as_int(team_stat(team_box, "fumblesLost"))
+        opponent_fumbles_lost = as_int(team_stat(opponent_box, "fumblesLost"))
+
         rushing_fumbles_lost = None
         receiving_fumbles_lost = None
 
@@ -569,6 +438,67 @@ async def get_espn_fantasy_game(event_id: str):
 
         opponent_score = competitors_by_id[opponent_id].get("score")
 
+        defensive_touchdowns = 0
+
+        for play in data.get("scoringPlays", []):
+            if str(play.get("team", {}).get("id")) != team_id:
+                continue
+
+            play_type = play.get("type", {}).get("text", "")
+
+            if play_type in {
+                "Interception Return Touchdown",
+                "Fumble Return Touchdown",
+            }:
+
+                defensive_touchdowns += 1
+
+        safeties = 0
+
+        for play in data.get("scoringPlays", []):
+            if str(play.get("team", {}).get("id")) != team_id:
+                continue
+
+            if play.get("type", {}).get("text") == "Safety":
+                safeties += 1
+
+        special_teams_touchdowns = 0
+
+        for play in data.get("scoringPlays", []):
+            if str(play.get("team", {}).get("id")) != team_id:
+                continue
+
+            play_type = play.get("type", {}).get("text", "")
+
+            if play_type in {
+                "Kickoff Return Touchdown",
+                "Punt Return Touchdown",
+                "Blocked Field Goal Touchdown",
+                "Blocked Punt Touchdown",
+            }:
+            
+                special_teams_touchdowns += 1
+
+        blocked_kicks = 0
+
+        for drive in data.get("drives", {}).get("previous", []):
+            for play in drive.get("plays", []):
+                play_type = play.get("type", {}).get("text", "")
+
+                if play_type not in {
+                    "Blocked Field Goal",
+                    "Blocked Punt",
+                }:
+                    continue
+
+                for participant in play.get("teamParticipants", []):
+                    if (
+                        str(participant.get("id")) == team_id
+                        and participant.get("type") == "defense"
+                    ):
+                        blocked_kicks += 1
+                        break
+
         results.append(
             FantasyGameStats(
                 espn_team_id=team_id,
@@ -606,11 +536,11 @@ async def get_espn_fantasy_game(event_id: str):
                 extra_points_made=xp_made,
                 extra_points_attempted=xp_attempted,
 
-                defensive_fumble_recoveries=None,
-                defensive_touchdowns=None,
-                safeties=None,
-                special_teams_touchdowns=None,
-                blocked_kicks=None,
+                defensive_fumble_recoveries=opponent_fumbles_lost,
+                defensive_touchdowns=defensive_touchdowns,
+                safeties=safeties,
+                special_teams_touchdowns=special_teams_touchdowns,
+                blocked_kicks=blocked_kicks,
             )
         )
 
